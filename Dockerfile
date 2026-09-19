@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir torch==2.14.0 \
     && pip install --no-cache-dir -r requirements.txt
 
 # Pesos de los encoders dentro de la imagen (ver nota 2 arriba).
+# Pesos de los encoders dentro de la imagen (ver nota 2 arriba).
 RUN python -c "\
 from sentence_transformers import SentenceTransformer; \
 [SentenceTransformer(m) for m in ('BAAI/bge-m3', \
