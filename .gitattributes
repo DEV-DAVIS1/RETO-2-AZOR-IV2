@@ -1,0 +1,10 @@
+# Base vectorial de la Etapa 1 en Git LFS: los indices FAISS pesan ~590 MB cada
+# uno y la metadata ~244 MB, muy por encima del limite de 100 MB por archivo de
+# GitHub. Requiere `git lfs install` antes del primer clon o push.
+*.faiss filter=lfs diff=lfs merge=lfs -text
+base_vectorial/**/*.faiss filter=lfs diff=lfs merge=lfs -text
+base_vectorial/*.jsonl filter=lfs diff=lfs merge=lfs -text
+
+# Fin de linea estable entre Windows y el contenedor Linux.
+* text=auto eol=lf
+*.sh text eol=lf

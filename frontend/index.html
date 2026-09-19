@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Azor IV · Asistente Ad Astra</title>
+<!--
+  Frontend de chat del Reto 1 (subdominio frontagent).
+  CODEFEST AD ASTRA 2026 · Etapa 2 · Equipo Azor IV
+
+  Permite a un evaluador humano conversar con el agente y, ademas, inspeccionar
+  la metadata de cada respuesta: rama elegida, agentes invocados, tokens por
+  agente y latencia. Es la misma informacion que consume ADL en el bloque
+  `metadata`, mostrada para que se pueda verificar a simple vista.
+
+  El endpoint se toma de ?api=... o del origen actual, para que el mismo archivo
+  sirva desplegado junto al agente o en un subdominio aparte.
+-->
+<style>
+  :root{
+    --bg:#EEF1F4; --surface:#FFFFFF; --surface2:#F3F6F9; --ink:#101C2B; --muted:#5B6B7E;
+    --line:#D5DCE4; --accent:#0B5FA5; --accent-ink:#FFFFFF; --signal:#E8A317;
+    --ok:#2E8555; --err:#B3261E;
+    --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+    --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0A121C; --surface:#111C2A; --surface2:#0D1622; --ink:#E6EDF5; --muted:#8FA1B5;
+      --line:#22324A; --accent:#4FA3E8; --accent-ink:#06121F; --signal:#F0B43A;
+      --ok:#4CC083; --err:#F2837B;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.55}
+  .app{max-width:980px;height:100%;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  h1{font-family:var(--f-display);font-size:28px;font-weight:700;letter-spacing:.02em;
+     text-transform:uppercase;margin:0}
+  h1 span{color:var(--accent)}
+  .estado{font-family:var(--f-mono);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .punto{width:8px;height:8px;border-radius:50%;background:var(--signal)}
+  .punto.ok{background:var(--ok)} .punto.err{background:var(--err)}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;
+         flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  #log{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:88%;padding:10px 13px;border-radius:8px;overflow-wrap:anywhere;white-space:pre-wrap}
+  .msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink);white-space:pre-wrap}
+  .msg.bot{align-self:flex-start;background:var(--surface2);border:1px solid var(--line)}
+  .msg.bot b{font-weight:600}
+  .cita{font-family:var(--f-mono);font-size:11px;color:var(--accent);
+        background:color-mix(in srgb,var(--accent) 12%,transparent);
+        padding:1px 5px;border-radius:4px;white-space:nowrap}
+
+  .fuentes{margin-top:10px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px;
+           white-space:normal}
+  .fuentes b{color:var(--ink);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+  .meta{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line);
+        font-family:var(--f-mono);font-size:11px;color:var(--muted);
+        display:flex;flex-wrap:wrap;gap:6px 14px}
+  .meta .clave{color:var(--ink)}
+  details{margin-top:8px;font-family:var(--f-mono);font-size:11px}
+  summary{cursor:pointer;color:var(--muted)}
+  details pre{background:var(--surface2);border:1px solid var(--line);border-radius:6px;
+              padding:10px;overflow-x:auto;max-height:280px;font-size:11px;margin:8px 0 0}
+
+  form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+  textarea{flex:1;resize:none;height:46px;font:inherit;color:var(--ink);background:var(--surface2);
+           border:1px solid var(--line);border-radius:6px;padding:11px 12px}
+  button{font:inherit;font-weight:600;border:0;border-radius:6px;padding:0 18px;cursor:pointer;
+         background:var(--accent);color:var(--accent-ink)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .ejemplos{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px}
+  .ejemplos button{background:var(--surface2);color:var(--muted);border:1px solid var(--line);
+                   font-weight:400;font-size:12px;padding:5px 10px;border-radius:14px}
+  @media (max-width:600px){.msg{max-width:100%}h1{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Azor <span>IV</span> · Asistente Ad Astra</h1>
+    <div class="estado"><span class="punto" id="punto"></span><span id="txtEstado">conectando…</span></div>
+  </header>
+
+  <div class="panel">
+    <div id="log">
+      <div class="msg bot">Hola. Analizo un corpus sobre tres fenomenos: <b>IA en entornos militares</b>,
+<b>seguridad espacial y orbita baja terrestre</b> y <b>dinamicas territoriales en America Latina</b>.
+
+Puedo responder preguntas con citas trazables, comparar fenomenos entre si y generar
+visualizaciones. Cada respuesta muestra abajo que agentes participaron y cuanto costo.</div>
+    </div>
+
+    <div class="ejemplos" id="ejemplos"></div>
+
+    <form id="formulario">
+      <textarea id="entrada" placeholder="Escribe tu pregunta…  (Enter envia, Shift+Enter nueva linea)"
+                autocomplete="off"></textarea>
+      <button id="enviar" type="submit">Enviar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+// El endpoint se resuelve en este orden: ?api= de la URL, luego el origen actual.
+// Asi el mismo archivo funciona servido por el agente o desde otro subdominio.
+const API = (new URLSearchParams(location.search).get('api')
+             || location.origin).replace(/\/$/, '');
+// Hilo conversacional: permite preguntas de seguimiento ("muestrame eso en un mapa").
+const SESION = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())).slice(0, 16);
+
+const log = document.getElementById('log');
+const entrada = document.getElementById('entrada');
+const botonEnviar = document.getElementById('enviar');
+const punto = document.getElementById('punto');
+const txtEstado = document.getElementById('txtEstado');
+
+const EJEMPLOS = [
+  '¿Que riesgos plantea la basura espacial en la orbita baja?',
+  '¿Como se regula el uso de armas autonomas?',
+  'Compara la IA militar con la seguridad espacial',
+  'Muestrame un mapa de las zonas del fenomeno 3',
+];
+
+function escapar(t){
+  return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Resalta los chunk_id citados y las negritas del comparador. Se aplica SIEMPRE
+// sobre texto ya escapado: la respuesta del modelo nunca se inserta como HTML.
+// Las citas llegan como [1], [2]... y apuntan al `indice` de `fuentes`; el nombre
+// del documento se muestra al pasar el cursor.
+function formatear(texto, fuentes){
+  const porIndice = {};
+  (fuentes || []).forEach(f => { porIndice[f.indice] = f; });
+  return escapar(texto)
+    .replace(/\[(\d{1,2})\]/g, (marca, n) => {
+      const f = porIndice[n];
+      if(!f) return marca;
+      const detalle = f.etiqueta + (f.doc_id_oficial ? ' · ' + f.doc_id_oficial : '');
+      return `<span class="cita" title="${escapar(detalle)}">${n}</span>`;
+    })
+    .replace(/\[([0-9a-f]{8,}_[0-9_]+)\]/g, '<span class="cita">$1</span>')
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+}
+
+function burbuja(clase, html){
+  const div = document.createElement('div');
+  div.className = 'msg ' + clase;
+  div.innerHTML = html;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+/** Lista de fuentes bajo la respuesta: a ella apuntan las citas [1], [2]... */
+function listaFuentes(fuentes){
+  if(!(fuentes || []).length) return '';
+  return `<div class="fuentes"><b>Fuentes</b>${fuentes.map(f =>
+    `<div><span class="cita">${escapar(f.indice)}</span> ${escapar(f.referencia || f.etiqueta)}</div>`
+  ).join('')}</div>`;
+}
+
+/** Ficha de metadata: es el mismo bloque que evalua ADL (seccion 2.4). */
+function fichaMetadata(datos){
+  const m = datos.metadata || {};
+  const t = m.tokens || {};
+  const rama = (datos.traza || {}).rama || '—';
+  const porAgente = (m.tokens_por_agente || [])
+    .map(a => `${a.agente} (${a.modelo}): ${a.total}`).join(' · ') || '—';
+  const campos = [
+    ['rama', rama],
+    ['agentes', (m.agentes_invocados || []).join(' → ') || '—'],
+    ['tokens', `${t.total ?? 0} (in ${t.input ?? 0} / out ${t.output ?? 0})`],
+    ['interacciones', m.num_interacciones ?? 0],
+    ['latencia', `${m.latencia_ms ?? 0} ms`],
+    ['estado', m.estado || '—'],
+  ];
+  const evidencia = (datos.evidencia || []).length
+    ? `<details><summary>Evidencia trazable (${datos.evidencia.length})</summary><pre>${
+        escapar(datos.evidencia.map(e =>
+          `[${e.doc_id} · ${e.chunk_id}] ${e.texto}`).join('\n\n'))}</pre></details>`
+    : '';
+  return `<div class="meta">${
+      campos.map(([k, v]) => `<span><span class="clave">${k}</span> ${escapar(v)}</span>`).join('')
+    }<span><span class="clave">por agente</span> ${escapar(porAgente)}</span></div>
+    ${evidencia}
+    <details><summary>JSON completo de la respuesta</summary><pre>${
+      escapar(JSON.stringify(datos, null, 2))}</pre></details>`;
+}
+
+async function consultar(pregunta){
+  botonEnviar.disabled = true;
+  burbuja('user', escapar(pregunta));
+  const espera = burbuja('bot', 'Consultando el corpus…');
+  const inicio = performance.now();
+  try{
+    const r = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pregunta, session_id: SESION}),
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const datos = await r.json();
+    espera.innerHTML = formatear(datos.respuesta || '(sin respuesta)', datos.fuentes)
+      + listaFuentes(datos.fuentes) + fichaMetadata(datos);
+  }catch(e){
+    espera.innerHTML = `<b>No se pudo consultar el agente.</b>\n${escapar(e.message)}
+\nEndpoint: ${escapar(API)}/chat  ·  ${Math.round(performance.now() - inicio)} ms`;
+  }finally{
+    botonEnviar.disabled = false;
+    log.scrollTop = log.scrollHeight;
+    entrada.focus();
+  }
+}
+
+document.getElementById('formulario').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const texto = entrada.value.trim();
+  if(!texto) return;
+  entrada.value = '';
+  consultar(texto);
+});
+
+entrada.addEventListener('keydown', ev => {
+  if(ev.key === 'Enter' && !ev.shiftKey){
+    ev.preventDefault();
+    document.getElementById('formulario').requestSubmit();
+  }
+});
+
+EJEMPLOS.forEach(texto => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = texto;
+  b.onclick = () => consultar(texto);
+  document.getElementById('ejemplos').appendChild(b);
+});
+
+// Sonda de salud: confirma que el endpoint responde antes de la primera pregunta.
+fetch(API + '/salud')
+  .then(r => r.json())
+  .then(s => {
+    punto.className = 'punto ok';
+    txtEstado.textContent = `${s.corpus.fragmentos.toLocaleString('es')} fragmentos · ` +
+                            `${s.corpus.indices.length} indices`;
+  })
+  .catch(() => {
+    punto.className = 'punto err';
+    txtEstado.textContent = 'agente no disponible';
+  });
+</script>
+</body>
+</html>
