@@ -180,7 +180,7 @@ declararse sano.
 ### `POST /chat`
 
 ```bash
-curl -X POST https://agent.azoriv.codefest2026.augusta.avaldigitallabs.com/chat \
+curl -X POST https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/ \
   -H "Content-Type: application/json" \
   -d '{"pregunta": "¿Qué riesgos genera la basura espacial en la órbita baja?"}'
 ```
