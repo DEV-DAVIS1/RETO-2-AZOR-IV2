@@ -1,13 +1,6 @@
+ 
 # CODEFEST AD ASTRA 2026 - Etapa 2 - Reto 1 - Equipo Azor IV
 # Imagen autosuficiente del agente (Anexo A.4). Build pack en Coolify: Dockerfile.
-#
-# Dos decisiones que determinan el tamano y el arranque de la imagen:
-#
-#   1. torch se instala desde el indice de solo CPU. La rueda por defecto arrastra
-#      CUDA (>2 GB) que el contenedor nunca usa.
-#   2. Los tres modelos de embeddings se descargan DURANTE EL BUILD. Si se dejaran
-#      para el arranque, el primer despliegue tardaria minutos bajando pesos desde
-#      Hugging Face y el healthcheck fallaria antes de que el servicio respondiera.
 
 FROM python:3.11-slim
 
@@ -27,16 +20,13 @@ WORKDIR /app
 
 # Capa de dependencias primero: cambiar el codigo no obliga a reinstalar todo.
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir torch==2.14.0 \
         --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
-# Pesos de los encoders dentro de la imagen (ver nota 2 arriba).
-# Pesos de los encoders dentro de la imagen (ver nota 2 arriba).
-RUN python -c "\
-from sentence_transformers import SentenceTransformer; \
-[SentenceTransformer(m) for m in ('BAAI/bge-m3', \
- 'intfloat/multilingual-e5-large', 'intfloat/multilingual-e5-large-instruct')]"
+# Pesos de los encoders dentro de la imagen.
+RUN python -c "from sentence_transformers import SentenceTransformer; [SentenceTransformer(m) for m in ('BAAI/bge-m3', 'intfloat/multilingual-e5-large', 'intfloat/multilingual-e5-large-instruct')]"
 
 COPY . .
 
@@ -44,6 +34,7 @@ COPY . .
 RUN useradd --create-home --uid 10001 azor \
     && mkdir -p /app/estado \
     && chown -R azor:azor /app/estado /opt/hf
+
 USER azor
 
 EXPOSE 8000
@@ -53,6 +44,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
     CMD curl -fsS http://localhost:8000/salud || exit 1
 
-# Un solo worker: los indices FAISS y los encoders ocupan varios GB de RAM y cada
-# worker cargaria su propia copia. La concurrencia la da el bucle asincrono.
+# Un solo worker.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
