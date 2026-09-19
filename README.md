@@ -53,7 +53,26 @@ El rationale de cada decisión está en **[docs/ARQUITECTURA.md](docs/ARQUITECTU
 
 ---
 
-## 2. Entregables y dónde están
+## 2. Servicio desplegado (URLs)
+
+Despliegue en el espacio Coolify del equipo. Un único contenedor sirve el backend
+y el frontend; el subdominio activo hoy es `dashboard.azor-iv`.
+
+| Recurso | URL |
+|---|---|
+| **Backend · consola interactiva (Swagger/OpenAPI)** | <https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/docs> |
+| Endpoint del agente (§2.4) | `POST https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/chat` |
+| Frontend de chat | <https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/> |
+| Ficha del agente (§2.3) | <https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/agent-card> |
+| Healthcheck | <https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/salud> |
+
+Desde `/docs` se puede probar `POST /chat` sin escribir código: *Try it out → Execute*.
+Los subdominios `agent.azor-iv…` y `frontagent.azor-iv…` que exige el Anexo A.5
+apuntan al mismo contenedor y se añaden en *Domains* del recurso.
+
+---
+
+## 3. Entregables y dónde están
 
 | Entregable (sección del PDF) | Ubicación |
 |---|---|
@@ -61,12 +80,12 @@ El rationale de cada decisión está en **[docs/ARQUITECTURA.md](docs/ARQUITECTU
 | Frontend de chat (§1.4, §2.2) | `frontend/index.html` |
 | Ficha del agente / agent card (§2.3) | `agent_card.json`, servida en `GET /agent-card` |
 | Documento de arquitectura (§1.4) | `docs/ARQUITECTURA.md` |
-| Instrucciones de despliegue (§1.4) | este README, sección 5 |
+| Instrucciones de despliegue (§1.4) | este README, sección 6 |
 | Dashboard del Reto 2 (§3) | `frontend/dashboard.html` |
 
 ---
 
-## 3. Estructura del repositorio
+## 4. Estructura del repositorio
 
 ```
 app/                     código del sistema
@@ -95,7 +114,7 @@ estado/                  logs y memoria en ejecución (no versionado)
 
 ---
 
-## 4. Ejecución local
+## 5. Ejecución local
 
 Requiere Python 3.11 y la base vectorial en `base_vectorial/`.
 
@@ -129,7 +148,7 @@ Para desarrollo sin gateway, apunta `LLM_BASE_URL` a Ollama
 
 ---
 
-## 5. Despliegue en Coolify
+## 6. Despliegue en Coolify
 
 Procedimiento del Anexo A de la especificación.
 
@@ -140,9 +159,9 @@ Procedimiento del Anexo A de la especificación.
 3. **Repositorio** — URL del repositorio privado, rama `main`, **Build pack:
    `Dockerfile`**.
 4. **Dominio** — *Domains → + Add Domain*:
-   `https://agent.azoriv.codefest2026.augusta.avaldigitallabs.com`, **Port
+   `https://agent.azor-iv.codefest2026.augusta.avaldigitallabs.com`, **Port
    interno 8000**, *www redirect* en **No redirect**.
-   El frontend de chat va en `frontagent.azoriv…` y el dashboard en `dashboard.azoriv…`.
+   El frontend de chat va en `frontagent.azor-iv…` y el dashboard en `dashboard.azor-iv…`.
 5. **Variables de entorno** — *Environment Variables → + Add*, marcadas para
    *Runtime*:
 
@@ -150,7 +169,7 @@ Procedimiento del Anexo A de la especificación.
 |---|---|---|
 | `LLM_API_KEY` | API key de ADL | **sí** |
 | `LLM_BASE_URL` | URL del gateway LiteLLM | **sí** |
-| `EQUIPO` | `azoriv` | no |
+| `EQUIPO` | `azor-iv` | no |
 | `MODELO_ORQUESTADOR` | `openai.gpt-oss-20b-1:0` | no |
 | `MODELO_REDACTOR` | `meta.llama3-3-70b-instruct` | no |
 | `MODELO_COMPARADOR` | `meta.llama3-3-70b-instruct` | no |
@@ -175,12 +194,12 @@ declararse sano.
 
 ---
 
-## 6. Uso del sistema
+## 7. Uso del sistema
 
 ### `POST /chat`
 
 ```bash
-curl -X POST https://dashboard.azor-iv.codefest2026.augusta.avaldigitallabs.com/ \
+curl -X POST https://agent.azor-iv.codefest2026.augusta.avaldigitallabs.com/chat \
   -H "Content-Type: application/json" \
   -d '{"pregunta": "¿Qué riesgos genera la basura espacial en la órbita baja?"}'
 ```
@@ -244,7 +263,7 @@ anterior **sin gastar tokens adicionales**:
 
 ---
 
-## 7. Pruebas
+## 8. Pruebas
 
 ```bash
 python -m pruebas.probar_contrato       # formato §2.4 y coherencia de la ficha (sin gateway)
@@ -259,7 +278,7 @@ las salidas crudas quedan en `pruebas/resultados/`.
 
 ---
 
-## 8. Control de presupuesto
+## 9. Control de presupuesto
 
 La bolsa del equipo es de 100 USD (§1.3). El sistema lee el costo real que reporta
 el gateway en la cabecera `x-litellm-response-cost` y lo acumula en
